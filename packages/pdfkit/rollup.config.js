@@ -1,19 +1,20 @@
-import babel from 'rollup-plugin-babel';
-import json from 'rollup-plugin-json';
-import nodeResolve from 'rollup-plugin-node-resolve';
+import babel from '@rollup/plugin-babel';
+import json from '@rollup/plugin-json';
+import replace from '@rollup/plugin-replace';
+import commonjs from '@rollup/plugin-commonjs';
+import nodeResolve from '@rollup/plugin-node-resolve';
 import { terser } from 'rollup-plugin-terser';
-import replace from 'rollup-plugin-replace';
 import ignore from 'rollup-plugin-ignore';
 
 import pkg from './package.json';
 
 const cjs = {
   exports: 'named',
-  format: 'cjs',
+  format: 'cjs'
 };
 
 const esm = {
-  format: 'es',
+  format: 'es'
 };
 
 const getCJS = override => Object.assign({}, cjs, override);
@@ -22,7 +23,7 @@ const getESM = override => Object.assign({}, esm, override);
 const babelConfig = ({ browser }) => ({
   babelrc: false,
   exclude: 'node_modules/**',
-  runtimeHelpers: true,
+  babelHelpers: 'runtime',
   presets: [
     [
       '@babel/preset-env',
@@ -31,70 +32,79 @@ const babelConfig = ({ browser }) => ({
         modules: false,
         ...(browser
           ? { targets: { browsers: 'last 2 versions' } }
-          : { targets: { node: '12' } }),
-      },
-    ],
+          : { targets: { node: '12' } })
+      }
+    ]
   ],
+  plugins: ['@babel/plugin-transform-runtime']
 });
 
+// createForOfIteratorHelperLoose
+// nodeResolve()
 const configBase = {
   input: 'src/index.js',
-  plugins: [nodeResolve(), json()],
-  external: Object.keys(pkg.dependencies),
+  plugins: [json()],
+  external: Object.keys(pkg.dependencies).concat(
+    '@babel/runtime/helpers/inheritsLoose',
+    '@babel/runtime/helpers/assertThisInitialized',
+    '@babel/runtime/helpers/extends',
+    'stream',
+    'zlib'
+  ),
   onwarn: (warning, rollupWarn) => {
     if (warning.code !== 'CIRCULAR_DEPENDENCY') {
       rollupWarn(warning);
     }
-  },
+  }
 };
 
 const serverConfig = Object.assign({}, configBase, {
   output: [
     getESM({ file: 'lib/pdfkit.es.js' }),
-    getCJS({ file: 'lib/pdfkit.cjs.js' }),
+    getCJS({ file: 'lib/pdfkit.cjs.js' })
   ],
   plugins: configBase.plugins.concat(
-    babel(babelConfig({ browser: false })),
     replace({
-      BROWSER: JSON.stringify(false),
+      BROWSER: JSON.stringify(false)
     }),
+    babel(babelConfig({ browser: false }))
   ),
-  external: configBase.external.concat(['fs']),
+  external: configBase.external.concat(['fs'])
 });
 
 const serverProdConfig = Object.assign({}, serverConfig, {
   output: [
     getESM({ file: 'lib/pdfkit.es.min.js' }),
-    getCJS({ file: 'lib/pdfkit.cjs.min.js' }),
+    getCJS({ file: 'lib/pdfkit.cjs.min.js' })
   ],
-  plugins: serverConfig.plugins.concat(terser()),
+  plugins: serverConfig.plugins.concat(terser())
 });
 
 const browserConfig = Object.assign({}, configBase, {
   output: [
     getESM({ file: 'lib/pdfkit.browser.es.js' }),
-    getCJS({ file: 'lib/pdfkit.browser.cjs.js' }),
+    getCJS({ file: 'lib/pdfkit.browser.cjs.js' })
   ],
   plugins: configBase.plugins.concat(
-    babel(babelConfig({ browser: true })),
-    replace({
-      BROWSER: JSON.stringify(true),
-    }),
     ignore(['fs']),
-  ),
+    replace({
+      BROWSER: JSON.stringify(true)
+    }),
+    babel(babelConfig({ browser: true }))
+  )
 });
 
 const browserProdConfig = Object.assign({}, browserConfig, {
   output: [
     getESM({ file: 'lib/pdfkit.browser.es.min.js' }),
-    getCJS({ file: 'lib/pdfkit.browser.cjs.min.js' }),
+    getCJS({ file: 'lib/pdfkit.browser.cjs.min.js' })
   ],
-  plugins: browserConfig.plugins.concat(terser()),
+  plugins: browserConfig.plugins.concat(terser())
 });
 
 export default [
   serverConfig,
   serverProdConfig,
   browserConfig,
-  browserProdConfig,
+  browserProdConfig
 ];
